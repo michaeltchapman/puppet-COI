@@ -47,6 +47,14 @@ class coi::profiles::openstack::controller (
   $swift_public_address     = hiera('swift_public_address', false),
 ) inherits coi::profiles::openstack::base {
 
+
+  if hiera('quantum_use_cisco_plugin') == true {
+    $chosen_quantum_plugin = 'quantum.plugins.cisco.network_plugin.PluginV2'
+  }
+  else {
+    $chosen_quantum_plugin = 'quantum.plugins.openvswitch.ovs_quantum_plugin.OVSQuantumPluginV2'
+  }
+
   class { '::openstack::controller':
     public_address          => $controller_node_public,
     # network
@@ -83,6 +91,7 @@ class coi::profiles::openstack::controller (
     quantum_db_password     => $quantum_db_password,
     quantum_db_name         => 'quantum',
     quantum_db_user         => 'quantum',
+    quantum_core_plugin     => $chosen_quantum_plugin,
     # enable quantum services
     enable_dhcp_agent       => $enable_dhcp_agent,
     enable_l3_agent         => $enable_l3_agent,
@@ -104,6 +113,49 @@ class coi::profiles::openstack::controller (
     swift                   => $swift,
     swift_user_password     => $swift_user_password,
     swift_public_address    => $swift_public_address,
+  }
+
+  if hiera('quantum_use_cisco_plugin') {
+
+      file { '/etc/quantum/plugins':
+        ensure  => directory,
+        mode    => '0750',
+        require => File['/etc/quantum/quantum.conf'],
+      }
+
+      file { '/etc/quantum/plugins/cisco':
+        ensure  => directory,
+        mode    => '0750',
+        require => File['/etc/quantum/plugins'],
+      }
+
+      file { '/etc/quantum/plugins/cisco/cisco_plugins.ini':
+        ensure  => file,
+        content => template('coi/cisco_plugins.ini.erb'),
+        owner   => 'root',
+        group   => $mysql::config::root_group,
+        mode    => '0644',
+        require => File['/etc/quantum/plugins/cisco'],
+      }
+
+      file { '/etc/quantum/plugins/cisco/db_conn.ini':
+        ensure  => file,
+        content => template('coi/db_conn.ini.erb'),
+        owner   => 'root',
+        group   => $mysql::config::root_group,
+        mode    => '0644',
+        require => File['/etc/quantum/plugins/cisco'],
+      }
+
+      file { '/etc/quantum/plugins/cisco/l2network_plugin.ini':
+        ensure  => file,
+        content => template('coi/l2network_plugin.ini.erb'),
+        owner   => 'root',
+        group   => $mysql::config::root_group,
+        mode    => '0644',
+        require => File['/etc/quantum/plugins/cisco'],
+      }
+
   }
 
   include naginator::control_target
